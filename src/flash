@@ -1,0 +1,44 @@
+#!/data/data/com.termux/files/usr/bin/python3
+
+import os
+import sys
+from pathlib import Path
+
+r3 = '\033[31m'
+r5 = '\033[30m'
+y1 = '\033[33m'
+
+def show_help():
+    print("""flash - Copyright (C) 2025 Adinata
+
+ Usage:
+   flash all             : flash with data wipe
+   flash keep_data       : flash with keeping userdata
+   flash extract <file>  : extract the rom to imgs folder
+   flash help            : show this message
+
+ example:
+   flash extract ROM.zip
+   flash all""")
+
+def check_imgs():
+    if not Path("imgs").exists():
+        print(r3 + "ERROR:" + r5 + " 'imgs' not found!")
+        print(" Use " + y1 + "'flash extract <file>'" + r5 + " first!")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or "help" in sys.argv:
+        show_help()
+    elif sys.argv[1] == "extract":
+        if len(sys.argv) < 3:
+            print(r3 + "ERROR:" + r5 +" Provide the ROM file path!")
+            show_help()
+            sys.exit(1)
+        os.execvp("flash-extract", ["flash-extract", sys.argv[2]])
+    elif sys.argv[1] in ("all", "keep_data"):
+        check_imgs()
+        os.execvp("flash-execute", ["flash-execute", sys.argv[1]])
+    else:
+        print(r3 + "ERROR:" + y1 + " Unknown command")
+        show_help()
