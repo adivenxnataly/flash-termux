@@ -1,9 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 def="\033[00m"
-r="\033[31m"
-g="\033[32m"
-y="\033[33m"
+r="\033[91m"
+g="\033[92m"
+y="\033[93m"
 
 LOG_FILE="flash.log"
 IMGS_DIR="imgs"
