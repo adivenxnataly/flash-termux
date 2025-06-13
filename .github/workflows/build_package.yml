@@ -1,0 +1,37 @@
+name: Build flash DEB package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'deb/**'
+      - '.github/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup build environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dpkg-dev
+        
+    - name: Build package
+      id: build
+      run: |
+        chmod +x .github/scripts/deb.sh
+        .github/scripts/deb.sh
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: flash-termux
+        path: ${{ steps.build.outputs.deb_path }}
