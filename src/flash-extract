@@ -1,0 +1,63 @@
+#!/data/data/com.termux/files/usr/bin/python3
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+def error(msg):
+    print(f"\033[91m ERROR: {msg}\033[0m", file=sys.stderr)
+    sys.exit(1)
+
+def extract_zst(zst_file):
+    img_file = zst_file.with_suffix('')
+    try:
+        subprocess.run(['zstd', '-d', '-f', zst_file, '-o', img_file], check=True)
+        return img_file
+    except subprocess.CalledProcessError:
+        error(f"\033[91m Failed to decompress {zst_file}")
+
+def extract_archive(archive):
+    if archive.suffix == '.zip':
+        subprocess.run(['unzip', '-q', archive], check=True)
+    elif archive.suffix == '.rar':
+        subprocess.run(['unrar', 'x', archive], check=True)
+    elif archive.suffix in ('.tar.gz', '.tgz'):
+        subprocess.run(['tar', '-xzf', archive], check=True)
+    elif archive.suffix == '.zst':
+        return extract_zst(archive)
+    else:
+        error(f"\033[91m Unsupported format:\033[33m {archive.suffix}")
+
+def organize_images():
+    if not Path('imgs').exists():
+        os.mkdir('imgs')
+    
+    for img in Path('.').glob('*.img'):
+        img.rename(f"imgs/{img.name}")
+
+    for nested_imgs in Path('.').rglob('imgs/*.img'):
+        nested_imgs.rename(f"imgs/{nested_imgs.name}")
+
+    if not any(Path('imgs').iterdir()):
+        error("\033[91m No .img files found after extraction")
+
+def main():
+    if len(sys.argv) < 2:
+        error(" Usage:\033[33m flash-extract <rom_file>")
+    
+    rom_file = Path(sys.argv[1])
+    if not rom_file.exists():
+        error(f"\033[91m File not found: {rom_file}")
+
+    try:
+        extract_archive(rom_file)
+        
+        organize_images()
+        
+        print(f"\033[32m SUCCESS:\033[0m Images ready in ./imgs/")
+
+    except subprocess.CalledProcessError as e:
+        error(f"\033[91m Extraction failed: {e}")
+
+if __name__ == "__main__":
+    main()
