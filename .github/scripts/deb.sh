@@ -3,7 +3,7 @@
 PREFIX="/data/data/com.termux/files/usr"
 HOME_DIR="/data/data/com.termux/files/home"
 NAME="flash-termux"
-VERSION=$(cat deb/share/.flash_version)
+VERSION="1.0.0"
 OUT_DIR="${GITHUB_WORKSPACE}/out"
 DEB_NAME="${NAME}_${VERSION}.deb"
 
@@ -13,19 +13,20 @@ fi
 
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}/deb${PREFIX}/bin"
+mkdir -p "${OUT_DIR}/deb${PREFIX}/lib/flash-termux/utils"
 mkdir -p "${OUT_DIR}/deb${HOME_DIR}/${NAME}"
 mkdir -p "${OUT_DIR}/deb/DEBIAN"
 
-install -v -m 755 src/flash "${OUT_DIR}/deb${PREFIX}/bin/"
-install -v -m 755 src/flash-extract "${OUT_DIR}/deb${PREFIX}/bin/"
-install -v -m 755 src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin/"
-
-cp -v deb/dpkg-conf/* "${OUT_DIR}/deb/DEBIAN/"
-
-install -v -m 644 deb/share/.flash_version "${OUT_DIR}/deb${HOME_DIR}/${NAME}/"
+cp -v src/flash src/flash-extract src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin/"
+cp -v src/utils/* "${OUT_DIR}/deb${PREFIX}/lib/flash-termux/utils/"
+cp -rv deb/dpkg-conf/* "${OUT_DIR}/deb/DEBIAN/"
+echo "${VERSION}" > "${OUT_DIR}/deb${HOME_DIR}/${NAME}/.flash_version"
 
 chmod -R 755 "${OUT_DIR}/deb/DEBIAN"
-find "${OUT_DIR}/deb${PREFIX}/bin" -type f -exec chmod 755 {} \;
+chmod 755 "${OUT_DIR}/deb${PREFIX}/bin/flash"
+chmod 755 "${OUT_DIR}/deb${PREFIX}/bin/flash-extract"
+chmod 755 "${OUT_DIR}/deb${PREFIX}/bin/flash-execute"
+find "${OUT_DIR}/deb${PREFIX}/lib/flash-termux/utils" -type f -exec chmod 644 {} \;
 
 cd "${OUT_DIR}/deb"
 dpkg-deb -Zxz -b . "${OUT_DIR}/${DEB_NAME}"
@@ -39,5 +40,5 @@ if [ -n "$GITHUB_WORKSPACE" ]; then
     echo "deb_path=${OUT_DIR}/${DEB_NAME}" >> $GITHUB_OUTPUT
 fi
 
-echo "=== Build Complete ==="
-echo "Package: ${OUT_DIR}/${DEB_NAME}"
+echo "=== Finish Build ==="
+echo "Package successfully built: ${OUT_DIR}/${DEB_NAME}"
