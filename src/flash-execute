@@ -1,0 +1,32 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+def="\033[00m"
+r="\033[31m"
+g="\033[32m"
+y="\033[33m"
+
+LOG_FILE="flash.log"
+IMGS_DIR="imgs"
+
+log() {
+    echo "$y [$(date '+%Y-%m-%d %H:%M:%S')]$def $1" | tee -a "$LOG_FILE"
+}
+
+fastboot devices | grep -q "fastboot" || {
+    log "$r ERROR:$def No device in fastboot mode!"
+    exit 1
+}
+
+for img in "$IMGS_DIR"/*.img; do
+    [ -f "$img" ] || continue
+    partition=$(basename "$img" .img)
+    log "$def Flashing $partition..."
+    fastboot flash "$partition" "$img" || {
+        log "$r FAILED:$def $partition"
+        exit 1
+    }
+done
+
+log "$g SUCCESS:$def flashing done!"
+log " ur device automaticly reboot to recovery, and$y WIPE DATA$def please.."
+fastboot reboot
