@@ -1,35 +1,36 @@
 #!/bin/bash
-set -e
 
 PREFIX="/data/data/com.termux/files/usr"
+HOME_DIR="/data/data/com.termux/files/home"
+NAME="flash-termux"
 VERSION=$(cat deb/share/.flash_version)
 OUT_DIR="${GITHUB_WORKSPACE}/out"
-DEB_NAME="flash-termux_${VERSION}.deb"
+DEB_NAME="${NAME}_${VERSION}.deb"
+
+if [ -z "$GITHUB_WORKSPACE" ]; then
+    OUT_DIR="out"
+fi
 
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}/deb${PREFIX}/bin"
-mkdir -p "${OUT_DIR}/deb${PREFIX}/share/flash-termux"
+mkdir -p "${OUT_DIR}/deb${HOME_DIR}/${NAME}"
 mkdir -p "${OUT_DIR}/deb/DEBIAN"
 
-install -m 755 src/flash "${OUT_DIR}/deb${PREFIX}/bin/"
-install -m 755 src/flash-extract "${OUT_DIR}/deb${PREFIX}/bin/"
-install -m 755 src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin/"
+install -v -m 755 src/flash "${OUT_DIR}/deb${PREFIX}/bin/"
+install -v -m 755 src/flash-extract "${OUT_DIR}/deb${PREFIX}/bin/"
+install -v -m 755 src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin/"
 
-install -m 644 deb/share/.flash_version "${OUT_DIR}/deb${PREFIX}/share/flash-termux/"
+cp -v deb/dpkg-conf/* "${OUT_DIR}/deb/DEBIAN/"
 
-sed "s/\$(cat ..\/share\/.flash_version)/${VERSION}/" \
-    deb/dpkg-conf/control > "${OUT_DIR}/deb/DEBIAN/control"
+install -v -m 644 deb/share/.flash_version "${OUT_DIR}/deb${HOME_DIR}/${NAME}/"
 
-cat > "${OUT_DIR}/deb/DEBIAN/postinst" <<EOF
-#!/bin/sh
-termux-setup-storage
-mkdir -p \$HOME/flash-termux/logs
-EOF
-chmod 755 "${OUT_DIR}/deb/DEBIAN/postinst"
+chmod -R 755 "${OUT_DIR}/deb/DEBIAN"
+find "${OUT_DIR}/deb${PREFIX}/bin" -type f -exec chmod 755 {} \;
 
-dpkg-deb -b "${OUT_DIR}/deb" "${OUT_DIR}/${DEB_NAME}"
+cd "${OUT_DIR}/deb"
+dpkg-deb -Zxz -b . "${OUT_DIR}/${DEB_NAME}"
 
-echo "=== Package Contents ==="
+echo "=== Package Structure ==="
 dpkg -c "${OUT_DIR}/${DEB_NAME}"
 echo "=== Package Metadata ==="
 dpkg -I "${OUT_DIR}/${DEB_NAME}"
@@ -38,4 +39,5 @@ if [ -n "$GITHUB_WORKSPACE" ]; then
     echo "deb_path=${OUT_DIR}/${DEB_NAME}" >> $GITHUB_OUTPUT
 fi
 
-echo "Package built: ${OUT_DIR}/${DEB_NAME}"
+echo "=== Build Complete ==="
+echo "Package: ${OUT_DIR}/${DEB_NAME}"
