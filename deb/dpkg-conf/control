@@ -1,5 +1,5 @@
 Package: flash-termux
-Version: $(cat ../share/.flash_version)
+Version: 1.0.0
 Architecture: all
 Maintainer: Adinata <adinata.ch@proton.me>
 Depends: python3, android-tools, unzip, unrar, tar, zstd
