@@ -4,9 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-r3 = '\033[31m'
-r5 = '\033[30m'
-y1 = '\033[33m'
+r3 = "\033[91m"
+y1 = "\033[93m"
+r5 = "\033[0m"
 
 def show_help():
     print("""flash - Copyright (C) 2025 Adinata
@@ -19,12 +19,13 @@ def show_help():
 
  example:
    flash extract ROM.zip
-   flash all""")
+   flash all
+   """)
 
 def check_imgs():
     if not Path("imgs").exists():
-        print(r3 + "ERROR:" + r5 + " 'imgs' not found!")
-        print(" Use " + y1 + "'flash extract <file>'" + r5 + " first!")
+        print(f"{r3} ERROR: {r5}'imgs' not found!\n")
+        print(f"{r5} Use {y1}'flash extract <file>'{r5} first!\n")
         sys.exit(1)
 
 if __name__ == "__main__":
@@ -32,13 +33,13 @@ if __name__ == "__main__":
         show_help()
     elif sys.argv[1] == "extract":
         if len(sys.argv) < 3:
-            print(r3 + "ERROR:" + r5 +" Provide the ROM file path!")
-            show_help()
+            print(f"{r3} ERROR: {r5}Provide the ROM file path!\n")
+            print(f"{y1} 'flash help' {r5}for more detail.\n")
             sys.exit(1)
         os.execvp("flash-extract", ["flash-extract", sys.argv[2]])
     elif sys.argv[1] in ("all", "keep_data"):
         check_imgs()
         os.execvp("flash-execute", ["flash-execute", sys.argv[1]])
     else:
-        print(r3 + "ERROR:" + y1 + " Unknown command")
-        show_help()
+        print(f"{r3} ERROR: Unknown command!\n")
+        print(f"{y1} 'flash help' {r5}for more detail.\n")
