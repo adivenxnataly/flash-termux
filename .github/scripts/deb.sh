@@ -2,7 +2,7 @@
 set -e
 
 PREFIX="/data/data/com.termux/files/usr"
-VERSION=$(cat deb/dpkg-conf/share/.flash_version)
+VERSION=$(cat deb/share/.flash_version)
 OUT_DIR="${GITHUB_WORKSPACE}/out"
 DEB_NAME="flash-termux_${VERSION}.deb"
 
@@ -15,7 +15,7 @@ install -m 755 src/flash "${OUT_DIR}/deb${PREFIX}/bin/"
 install -m 755 src/flash-extract "${OUT_DIR}/deb${PREFIX}/bin/"
 install -m 755 src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin/"
 
-install -m 644 deb/dpkg-conf/share/.flash_version "${OUT_DIR}/deb${PREFIX}/share/flash-termux/"
+install -m 644 deb/share/.flash_version "${OUT_DIR}/deb${PREFIX}/share/flash-termux/"
 
 sed "s/\$(cat ..\/share\/.flash_version)/${VERSION}/" \
     deb/dpkg-conf/control > "${OUT_DIR}/deb/DEBIAN/control"
