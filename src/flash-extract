@@ -1,63 +1,106 @@
 #!/data/data/com.termux/files/usr/bin/python3
+
 import os
 import sys
 import subprocess
 from pathlib import Path
 
+r3 = "\033[91m"
+y1 = "\033[93m"
+r5 = "\033[0m"
+g3 = "\033[32m"
+
 def error(msg):
-    print(f"\033[91m ERROR: {msg}\033[0m", file=sys.stderr)
+    print(f"{r3} ERROR: {msg} {r5}", file=sys.stderr)
     sys.exit(1)
 
 def extract_zst(zst_file):
     img_file = zst_file.with_suffix('')
+    print(f"{y1} [1/3] Decompressing {r3}{zst_file.name}{y1}...{r5}", end=' ', flush=True)
     try:
-        subprocess.run(['zstd', '-d', '-f', zst_file, '-o', img_file], check=True)
+        result = subprocess.run(['zstd', '-d', '-f', zst_file, '-o', img_file], 
+                              check=True,
+                              capture_output=True,
+                              text=True)
+        print(f"{g1} ✓ Done! {y1}({img_file.name}){r5}")
         return img_file
-    except subprocess.CalledProcessError:
-        error(f"\033[91m Failed to decompress {zst_file}")
+    except subprocess.CalledProcessError as e:
+        print(f"{r3} ✗ Failed!{r5}")
+        error(f" zstd error: {e.stderr.strip()}")
 
 def extract_archive(archive):
+    print(f"\n{y1} Extracting {r3}{archive.name}{y1}...{r5}")
+    
     if archive.suffix == '.zip':
-        subprocess.run(['unzip', '-q', archive], check=True)
+        print(f"{y1} [2/3] Unzipping archive{r5}", end=' ', flush=True)
+        try:
+            subprocess.run(['unzip', '-q', archive], check=True)
+            print(f"{g1} ✓ Done!{r5}")
+        except subprocess.CalledProcessError as e:
+            print(f"{r3} ✗ Failed!{r5}")
+            error(f" unzip error: {e.stderr.strip()}")
+            
     elif archive.suffix == '.rar':
-        subprocess.run(['unrar', 'x', archive], check=True)
+        print(f"{y1} [2/3] Extracting RAR{r5}", end=' ', flush=True)
+        try:
+            subprocess.run(['unrar', 'x', archive], check=True)
+            print(f"{g1} ✓ Done!{r5}")
+        except subprocess.CalledProcessError as e:
+            print(f"{r3} ✗ Failed!{r5}")
+            error(f" unrar error: {e.stderr.strip()}")
+            
     elif archive.suffix in ('.tar.gz', '.tgz'):
-        subprocess.run(['tar', '-xzf', archive], check=True)
+        print(f"{y1} [2/3] Untarring archive{r5}", end=' ', flush=True)
+        try:
+            subprocess.run(['tar', '-xzf', archive], check=True)
+            print(f"{g1} ✓ Done!{r5}")
+        except subprocess.CalledProcessError as e:
+            print(f"{r3} ✗ Failed!{r5}")
+            error(f" tar error: {e.stderr.strip()}")
+            
     elif archive.suffix == '.zst':
         return extract_zst(archive)
     else:
-        error(f"\033[91m Unsupported format:\033[33m {archive.suffix}")
+        error(f"{r3} Unsupported format:{y1} {archive.suffix}{r5}")
 
 def organize_images():
+    print(f"{y1} [3/3] Organizing images...{r5}", end=' ', flush=True)
+    
     if not Path('imgs').exists():
         os.mkdir('imgs')
     
+    moved_files = 0
     for img in Path('.').glob('*.img'):
         img.rename(f"imgs/{img.name}")
-
+        moved_files += 1
+    
     for nested_imgs in Path('.').rglob('imgs/*.img'):
         nested_imgs.rename(f"imgs/{nested_imgs.name}")
-
+        moved_files += 1
+    
     if not any(Path('imgs').iterdir()):
-        error("\033[91m No .img files found after extraction")
+        print(f"{r3} ✗ Failed!{r5}")
+        error(" No .img files found after extraction")
+    else:
+        print(f"{g1} ✓ Done! {y1}(Moved {moved_files} files to imgs/){r5}")
 
 def main():
     if len(sys.argv) < 2:
-        error(" Usage:\033[33m flash-extract <rom_file>")
+        error(" Usage:{y1} flash-extract <rom_file>")
     
     rom_file = Path(sys.argv[1])
     if not rom_file.exists():
-        error(f"\033[91m File not found: {rom_file}")
+        error(f"{r3} File not found:{r5} {rom_file}")
 
     try:
         extract_archive(rom_file)
         
         organize_images()
         
-        print(f"\033[32m SUCCESS:\033[0m Images ready in ./imgs/")
+        print(f"{g3} SUCCESS:{r5} Images ready in ./imgs/")
 
     except subprocess.CalledProcessError as e:
-        error(f"\033[91m Extraction failed: {e}")
+        error(f"{r3} Extraction failed: {e}")
 
 if __name__ == "__main__":
     main()
