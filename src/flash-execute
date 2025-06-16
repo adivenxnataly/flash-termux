@@ -6,6 +6,25 @@ y1="\033[33m"
 b1="\033[34m"
 r5="\033[0m"
 
+slot=""
+force=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --slot)
+            slot="$2"
+            shift 2
+            ;;
+        --force)
+            force=true
+            shift
+            ;;
+        *)
+            mode="$1"
+            shift
+            ;;
+    esac
+done
+
 LOG_FILE="flash.log"
 IMGS_DIR="$(pwd)"
 
@@ -14,11 +33,12 @@ log() {
 }
 
 confirm() {
+    if $force; then return 0; fi
     echo -ne "${y1}>> $1 (y/n)? ${r5}"
     read -r choice
     case "$choice" in
         y|Y) return 0 ;;
-        *) log "${r3} Operation cancelled${r5}"; return 1 ;;
+        *) log "${r3}Operation cancelled${r5}"; return 1 ;;
     esac
 }
 
@@ -31,10 +51,35 @@ check_images() {
     fi
 }
 
+set_slot() {
+    if [ -n "$slot" ]; then
+        log "${g3}Setting active slot to ${slot}...${r5}"
+        fastboot set_active "$slot" || {
+            log "${r3}Failed to set active slot!${r5}"
+            exit 1
+        }
+        fastboot oem cdms
+    fi
+}
+
+flash_partition() {
+    local partition="$1"
+    local img="$2"
+    
+    if [ -n "$slot" ] && [[ "$partition" != "super" ]]; then
+        partition="${partition}_${slot}"
+    fi
+    
+    log "${b1}Flashing $partition...${r5}"
+    fastboot flash "$partition" "$img" || {
+        log "${r3}Failed to flash $partition!${r5}"
+        return 1
+    }
+}
+
 erase_partitions() {
     log "${r3}Starting data wipe...${r5}"
-    
-    partitions=("userdata" "cache" "metadata" "cust")
+    partitions=("userdata" "metadata" "cache" "cust" "md_udc" "frp")
     
     for partition in "${partitions[@]}"; do
         if confirm " Erase ${partition} partition?"; then
@@ -44,51 +89,9 @@ erase_partitions() {
             }
         fi
     done
-    
-    log "${g3}Data wipe completed!${r5}"
 }
 
-dv_vbmeta() {
-    local vbmeta_file="$1"
-    local partition=$(basename "$vbmeta_file" .img)
-    
-    if confirm " ${y1}'Disable verity/verification'${r5} for ${partition}"; then
-        log "${b1}Flashing ${partition} with verity disabled...${r5}"
-        fastboot --disable-verity --disable-verification flash "$partition" "$vbmeta_file"
-    else
-        log "${b1}Flashing ${partition} normally...${r5}"
-        fastboot flash "$partition" "$vbmeta_file"
-    fi
-}
-
-preloader() {
-    local preloaders=(preloader*)
-    
-    if [ ${#preloaders[@]} -gt 1 ]; then
-        echo -e "${y1}There are duplicate preloaders:${r5}"
-        for i in "${!preloaders[@]}"; do
-            echo "$((i+1)). ${preloaders[$i]}"
-        done
-        
-        while true; do
-            echo -ne "${y1}Select preloader (1-${#preloaders[@]}): ${r5}"
-            read -r choice
-            if [[ $choice =~ ^[1-${#preloaders[@]}]$ ]]; then
-                local selected="${preloaders[$((choice-1))]}"
-                log "${r3}Flashing preloader: $selected${r5}"
-                confirm " Flash preloader (dangerous operation)" && \
-                fastboot flash preloader "$selected"
-                return
-            fi
-            echo -e "${r3}Invalid option!${r5}"
-        done
-    elif [ ${#preloaders[@]} -eq 1 ]; then
-        confirm " Flash preloader ${preloaders[0]} (dangerous operation)" && \
-        fastboot flash preloader "${preloaders[0]}"
-    fi
-}
-
-log "${g3}Starting flash process${r5}"
+log "Starting flash process:"
 
 fastboot devices | grep -q "fastboot" || {
     log "${r3}No device in fastboot mode!${r5}"
@@ -96,14 +99,15 @@ fastboot devices | grep -q "fastboot" || {
 }
 
 check_images
+set_slot
 
-if [ "$1" == "all" ]; then
-    if confirm " ${r3}WARNING: This will ERASE ALL USER DATA!${r5} Continue?"; then
+if [ "$mode" == "all" ]; then
+    if confirm " ${r3}WARNING: This will ERASE ALL USER DATA! Continue?${r5}"; then
         erase_partitions
     else
         log "${r3}Data wipe cancelled!${r5}"
     fi
-elif [ "$1" == "keep_data" ]; then
+elif [ "$mode" == "keep_data" ]; then
     log "${g3}Keeping user data (no wipe will be performed)${r5}"
 else
     log "${r3}Unknown command!${r5}"
@@ -112,24 +116,26 @@ fi
 
 for vbmeta in vbmeta*.img; do
     [ -f "$vbmeta" ] || continue
-    dv_vbmeta "$vbmeta" || {
-        log "${r3}Failed to flash $vbmeta!${r5}"
-    }
+    partition=$(basename "$vbmeta" .img)
+    flash_partition "$partition" "$vbmeta"
 done
 
-preloader
+preloader=(preloader*)
+if [ ${#preloaders[@]} -eq 1 ]; then
+    confirm " Flash preloader (dangerous operation)" && \
+    flash_partition "preloader" "${preloaders[0]}"
+fi
 
 for img in *.img *.bin; do
     [ -f "$img" ] || continue
+    
     case "$img" in
         vbmeta*|preloader*) continue ;;
         *)
             partition=$(basename "$img" .img)
             partition=$(basename "$partition" .bin)
-            log "${b1}Flashing $partition...${r5}"
-            fastboot flash "$partition" "$img" || {
-                log "${r3}Failed to flash $partition!${r5}"
-            }
+            
+            flash_partition "$partition" "$img"
             ;;
     esac
 done
