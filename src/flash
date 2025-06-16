@@ -12,34 +12,58 @@ def show_help():
     print("""flash - Copyright (C) 2025 Adinata
 
  Usage:
-   flash all             : flash with data wipe
-   flash keep_data       : flash with keeping userdata
-   flash extract <file>  : extract the rom to current directory
-   flash help            : show this message
+   flash all              : flash with data wipe
+   flash keep_data        : flash with keeping userdata
+   flash extract <file>   : extract the rom to current directory
+   flash help             : show this message
 
- example:
+ Advanced Options:
+   --slot=<a|b>           : Specify slot for A/B devices
+   --force                : Skip confirmation prompts
+
+ Example:
    flash extract ROM.zip
-   flash all
+   flash all --slot=a
+   flash keep_data --slot=b
    """)
 
-def check_imgs():
-    if not Path("images").exists():
-        print(f"{r3} ERROR: {r5}'images' not found!\n")
-        print(f"{r5} Use {y1}'flash extract <file>'{r5} first!\n")
-        sys.exit(1)
-
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or "help" in sys.argv:
+    slot = None
+    force = False
+    args = []
+    
+    for arg in sys.argv[1:]:
+        if arg.startswith("--slot="):
+            slot = arg.split("=")[1].lower()
+            if slot not in ['a', 'b']:
+                print(f"{r3} ERROR: {r5}Invalid slot! Use 'a' or 'b'")
+                sys.exit(1)
+        elif arg == "--force":
+            force = True
+        elif arg in ["help", "-h", "--help"]:
+            show_help()
+            sys.exit(0)
+        else:
+            args.append(arg)
+    
+    if len(args) < 1:
         show_help()
-    elif sys.argv[1] == "extract":
-        if len(sys.argv) < 3:
-            print(f"{r3} ERROR: {r5}Provide the ROM file path!\n")
-            print(f"{y1} 'flash help' {r5}for more detail.\n")
+        sys.exit(0)
+    
+    if args[0] == "extract":
+        if len(args) < 2:
+            print(f"{r3} ERROR: {r5}Provide the ROM file path!")
+            print(f"{y1} 'flash help'{r5} for more detail.")
             sys.exit(1)
-        os.execvp("flash-extract", ["flash-extract", sys.argv[2]])
-    elif sys.argv[1] in ("all", "keep_data"):
-        check_imgs()
-        os.execvp("flash-execute", ["flash-execute", sys.argv[1]])
+        os.execvp("flash-extract", ["flash-extract", args[1]])
+    elif args[0] in ("all", "keep_data"):
+        execute_args = ["flash-execute", args[0]]
+        if slot:
+            execute_args.extend(["--slot", slot])
+        if force:
+            execute_args.append("--force")
+        os.execvp("flash-execute", execute_args)
     else:
-        print(f"{r3} ERROR: Unknown command!\n")
-        print(f"{y1} 'flash help' {r5}for more detail.\n")
+        print(f"{r3} ERROR: Unknown command!")
+        print(f"{y1} 'flash help'{r5} for more detail.")
+        sys.exit(1)
