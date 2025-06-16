@@ -2,105 +2,152 @@
 
 import os
 import sys
+import time
+import zipfile
 import subprocess
+import threading
 from pathlib import Path
 
-r3 = "\033[91m"
-y1 = "\033[93m"
+r3 = "\033[31m"
+y1 = "\033[33m"
+g1 = "\033[32m"
+b1 = "\033[34m"
 r5 = "\033[0m"
-g3 = "\033[32m"
+
+b = "\033[1m"
+r = "\033[0m"
+
+progress_percent = 0
+progress_active = True
 
 def error(msg):
-    print(f"{r3} ERROR: {msg} {r5}", file=sys.stderr)
+    global progress_active
+    progress_active = False
+    print(f"\n{r3}ERROR:{r5} {msg}")
     sys.exit(1)
 
-def extract_zst(zst_file):
-    img_file = zst_file.with_suffix('')
-    print(f"{y1} [1/3] Decompressing {r3}{zst_file.name}{y1}...{r5}", end=' ', flush=True)
+def format_size(size):
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
+
+def animate_progress():
+    global progress_percent
+    dots = ['   ', '.  ', '.. ', '...']
+    i = 0
+    
+    while progress_active:
+        sys.stdout.write(f"\r{y1}[{progress_percent:3d}%]{r5} Extracting{dots[i % 4]}")
+        sys.stdout.flush()
+        i += 1
+        time.sleep(0.3)
+    
+    # Cleanup akhir
+    if progress_percent == 100:
+        sys.stdout.write(f"\r{g1}[100%]{r5} Extraction complete!{' '*10}{r5}\n")
+    else:
+        sys.stdout.write(f"\r{r3}[ERROR]{r5} Process interrupted!{' '*10}{r5}\n\n")
+
+def extract_zip(archive):
+    global progress_percent
+    
     try:
-        result = subprocess.run(['zstd', '-d', '-f', zst_file, '-o', img_file], 
-                              check=True,
-                              capture_output=True,
-                              text=True)
-        print(f"{g1} ✓ Done! {y1}({img_file.name}){r5}")
-        return img_file
-    except subprocess.CalledProcessError as e:
-        print(f"{r3} ✗ Failed!{r5}")
-        error(f" zstd error: {e.stderr.strip()}")
+        with zipfile.ZipFile(archive, 'r') as zip_ref:
+            file_list = zip_ref.infolist()
+            total_files = len(file_list)
+            
+            for i, file in enumerate(file_list):
+                zip_ref.extract(file)
+                progress_percent = int((i + 1) / total_files * 100)
+                
+    except Exception as e:
+        error(f"{r3} ZIP extraction failed: {str(e)}")
 
-def extract_archive(archive):
-    print(f"\n{y1} Extracting {r3}{archive.name}{y1}...{r5}")
+def extract_tar(archive):
+    global progress_percent
     
-    if archive.suffix == '.zip':
-        print(f"{y1} [2/3] Unzipping archive{r5}", end=' ', flush=True)
-        try:
-            subprocess.run(['unzip', '-q', archive], check=True)
-            print(f"{g1} ✓ Done!{r5}")
-        except subprocess.CalledProcessError as e:
-            print(f"{r3} ✗ Failed!{r5}")
-            error(f" unzip error: {e.stderr.strip()}")
-            
-    elif archive.suffix == '.rar':
-        print(f"{y1} [2/3] Extracting RAR{r5}", end=' ', flush=True)
-        try:
-            subprocess.run(['unrar', 'x', archive], check=True)
-            print(f"{g1} ✓ Done!{r5}")
-        except subprocess.CalledProcessError as e:
-            print(f"{r3} ✗ Failed!{r5}")
-            error(f" unrar error: {e.stderr.strip()}")
-            
-    elif archive.suffix in ('.tar.gz', '.tgz'):
-        print(f"{y1} [2/3] Untarring archive{r5}", end=' ', flush=True)
-        try:
-            subprocess.run(['tar', '-xzf', archive], check=True)
-            print(f"{g1} ✓ Done!{r5}")
-        except subprocess.CalledProcessError as e:
-            print(f"{r3} ✗ Failed!{r5}")
-            error(f" tar error: {e.stderr.strip()}")
-            
-    elif archive.suffix == '.zst':
-        return extract_zst(archive)
-    else:
-        error(f"{r3} Unsupported format:{y1} {archive.suffix}{r5}")
+    cmd = f"pv -n {archive} | tar -xzf -"
+    process = subprocess.Popen(cmd, shell=True,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             universal_newlines=True)
+    
+    for line in process.stderr:
+        if line.strip().isdigit():
+            progress_percent = int(line.strip())
+    
+    if process.wait() != 0:
+        error(f"{r3} tar extraction failed!")
 
-def organize_images():
-    print(f"{y1} [3/3] Organizing images...{r5}", end=' ', flush=True)
+def extract_rar(archive):
+    global progress_percent
     
-    if not Path('imgs').exists():
-        os.mkdir('imgs')
+    result = subprocess.run(['unrar', 'x', archive], capture_output=True)
+    if result.returncode != 0:
+        error(f"unrar failed: {result.stderr.decode()}")
+    progress_percent = 100
+
+def extract_zstd(archive):
+    global progress_percent
     
-    moved_files = 0
-    for img in Path('.').glob('*.img'):
-        img.rename(f"imgs/{img.name}")
-        moved_files += 1
-    
-    for nested_imgs in Path('.').rglob('imgs/*.img'):
-        nested_imgs.rename(f"imgs/{nested_imgs.name}")
-        moved_files += 1
-    
-    if not any(Path('imgs').iterdir()):
-        print(f"{r3} ✗ Failed!{r5}")
-        error(" No .img files found after extraction")
-    else:
-        print(f"{g1} ✓ Done! {y1}(Moved {moved_files} files to imgs/){r5}")
+    if subprocess.run(['zstd', '-d', '-f', archive]).returncode != 0:
+        error(f"{r3} zstd decompression failed!")
+    progress_percent = 100
 
 def main():
-    if len(sys.argv) < 2:
-        error(" Usage:{y1} flash-extract <rom_file>")
+    global progress_active, progress_percent
     
-    rom_file = Path(sys.argv[1])
-    if not rom_file.exists():
-        error(f"{r3} File not found:{r5} {rom_file}")
+    if len(sys.argv) < 2:
+        error("Usage: flash-extract <file>")
+
+    file = Path(sys.argv[1])
+    if not file.exists():
+        error(f"File not found: {file}")
+
+    missing = []
+    for cmd in ['pv', 'tar', 'zstd', 'unrar']:
+        try:
+            subprocess.run([cmd, '--version'],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+        except:
+            missing.append(cmd)
+    
+    if missing:
+        error(f"{r3} Missing: {' '.join(missing)}\n{r5} Install with:{y1} pkg install {' '.join(missing)}")
+
+    print(f"\n{b1}╭─ File Info ──────────────────────────────{r5}{r}")
+    print(f"{b1}│ {y1}Archive:{r5} {file.name}")
+    print(f"{b1}│ {y1}Size:{r5} {format_size(file.stat().st_size)}")
+    print(f"{b1}│ {y1}Format:{r5} {file.suffix}")
+    print(f"{b1}╰──────────────────────────────────────────{r5}")
+
+    progress_thread = threading.Thread(target=animate_progress)
+    progress_thread.start()
 
     try:
-        extract_archive(rom_file)
+        if file.suffix == '.zip':
+            extract_zip(file)
+        elif file.suffix in ('.tar.gz', '.tgz'):
+            extract_tar(file)
+        elif file.suffix == '.zst':
+            extract_zstd(file)
+        elif file.suffix == '.rar':
+            extract_rar(file)
+        else:
+            error(f"Unsupported format: {file.suffix}")
         
-        organize_images()
+        progress_percent = 100
         
-        print(f"{g3} SUCCESS:{r5} Images ready in ./imgs/")
+    except Exception as e:
+        error(str(e))
+    finally:
+        progress_active = False
+        progress_thread.join()
 
-    except subprocess.CalledProcessError as e:
-        error(f"{r3} Extraction failed: {e}")
+    print(f"{g1}SUCCESS:{r5} files ready in current directory")
 
 if __name__ == "__main__":
     main()
