@@ -1,32 +1,98 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-def="\033[00m"
-r="\033[91m"
-g="\033[92m"
-y="\033[93m"
+r3="\033[31m"
+g3="\033[32m"
+y1="\033[33m"
+b1="\033[34m"
+r5="\033[0m"
 
 LOG_FILE="flash.log"
-IMGS_DIR="imgs"
+IMGS_DIR="images"
 
 log() {
-    echo "$y [$(date '+%Y-%m-%d %H:%M:%S')]$def $1" | tee -a "$LOG_FILE"
+    echo -e "${y1}$(date '+%Y-%m-%d %H:%M:%S')${r5} - $1" | tee -a "$LOG_FILE"
 }
 
+confirm() {
+    echo -ne "${y1}>> $1 (y/n)? ${r5}"
+    read -r choice
+    case "$choice" in
+        y|Y) return 0 ;;
+        *) log "${r3} Operation cancelled${r5}"; return 1 ;;
+    esac
+}
+
+dv_vbmeta() {
+    local vbmeta_file="$1"
+    local partition=$(basename "$vbmeta_file" .img)
+    
+    if confirm " ${y1}'Disable verity/verification'${r5} for ${partition}"; then
+        log "${b1} Flashing ${partition} with verity disabled...${r5}"
+        fastboot --disable-verity --disable-verification flash "$partition" "$vbmeta_file"
+    else
+        log "${b1} Flashing ${partition} normally...${r5}"
+        fastboot flash "$partition" "$vbmeta_file"
+    fi
+}
+
+preloader() {
+    local preloaders=("$IMGS_DIR"/preloader*)
+    
+    if [ ${#preloaders[@]} -gt 1 ]; then
+        echo -e "${y1} There are duplicate preloaders:${r5}"
+        for i in "${!preloaders[@]}"; do
+            echo "$((i+1)). $(basename "${preloaders[$i]}")"
+        done
+        
+        while true; do
+            echo -ne "${y1} Select preloader (1-${#preloaders[@]}): ${r5}"
+            read -r choice
+            if [[ $choice =~ ^[1-${#preloaders[@]}]$ ]]; then
+                local selected="${preloaders[$((choice-1))]}"
+                log "${r3} Flashing preloader: $(basename "$selected")${r5}"
+                confirm " Flash preloader (a dangerous operation)" && \
+                fastboot flash preloader "$selected"
+                return
+            fi
+            echo -e "${r3} Invalid option!${r5}"
+        done
+    elif [ ${#preloaders[@]} -eq 1 ]; then
+        confirm " Flash preloader $(basename "${preloaders[0]}") (a dangerous operation)" && \
+        fastboot flash preloader "${preloaders[0]}"
+    fi
+}
+
+log "${g3} Starting flash process:${r5}"
+
 fastboot devices | grep -q "fastboot" || {
-    log "$r ERROR:$def No device in fastboot mode!"
+    log "${r3} No device in fastboot mode!${r5}"
     exit 1
 }
 
-for img in "$IMGS_DIR"/*.img; do
-    [ -f "$img" ] || continue
-    partition=$(basename "$img" .img)
-    log "$def Flashing $partition..."
-    fastboot flash "$partition" "$img" || {
-        log "$r FAILED:$def $partition"
-        exit 1
+for vbmeta in "$IMGS_DIR"/vbmeta*.img; do
+    [ -f "$vbmeta" ] || continue
+    dv_vbmeta "$vbmeta" || {
+        log "${r3} Failed to flash $(basename "$vbmeta")!${r5}"
     }
 done
 
-log "$g SUCCESS:$def flashing done!"
-log " ur device automaticly reboot to recovery, and$y WIPE DATA$def please.."
-fastboot reboot
+preloader
+
+for img in "$IMGS_DIR"/*.{img,bin}; do
+    [ -f "$img" ] || continue
+    case $(basename "$img") in
+        vbmeta*|preloader*) continue ;;
+        *)
+            partition=$(basename "$img" .img)
+            partition=$(basename "$partition" .bin)
+            log "${b1}  Flashing $partition...${r5}"
+            fastboot flash "$partition" "$img" || {
+                log "${r3} Failed to flash $partition!${r5}"
+            }
+            ;;
+    esac
+done
+
+log "${g3} SUCCESS:${r5} Flashing completed!"
+log " Reboot to: recovery"
+fastboot reboot recovery
