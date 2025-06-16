@@ -2,7 +2,7 @@ Package: flash-termux
 Version: 1.0.0
 Architecture: all
 Maintainer: Adinata <adinata.ch@proton.me>
-Depends: python3, android-tools, unzip, unrar, tar, zstd
+Depends: python3, android-tools, unzip, unrar, tar, zstd, pv
 Description: Advanced ROM flashing tool for Termux
  Command-line tool for extracting and flashing Android ROMs.
 Homepage: https://github.com/adivenxnataly/flash-termux
