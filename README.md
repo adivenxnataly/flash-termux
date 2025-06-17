@@ -12,8 +12,8 @@ Advanced ROM flashing tool for Termux.
 ```shell
 apt update -y && apt upgrade -y
 apt install wget -y
-wget https://github.com/adivenxnataly/flash-termux/releases/download/1.0.0/flash-termux_1.0.0-14ad5e3.deb
-apt install ~/flash-termux_1.0.0-14ad5e3.deb
+wget https://github.com/adivenxnataly/flash-termux/releases/download/1.0.0/flash-termux_1.0.0-74769c6.deb
+apt install ~/flash-termux_1.0.0-74769c6.deb
 ```
 
 #### Usage
@@ -29,11 +29,13 @@ flash - Copyright (C) 2025 Adinata
  Advanced Options:
    --slot=<a|b>           : Specify slot for A/B devices
    --force                : Skip confirmation prompts
+   --disable-verity       : Disable dm-verity and verification
+   -v, --version          : Show flash-termux version
 
  Example:
    flash extract ROM.zip
-   flash all --slot=a
-   flash keep_data --slot=b
+   flash all --slot=a --disable-verity
+   flash keep_data --slot=b --force
 
 ```
 #### Option Usage
