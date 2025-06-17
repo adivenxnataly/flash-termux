@@ -22,7 +22,7 @@ cp -v src/flash src/flash-extract src/flash-execute "${OUT_DIR}/deb${PREFIX}/bin
 cp -v src/utils/* "${OUT_DIR}/deb${PREFIX}/lib/flash-termux/utils/"
 cp -rv deb/dpkg-conf/* "${OUT_DIR}/deb/DEBIAN/"
 sed -i "s/^Version: .*/Version: ${VERSION}-${COMMIT_HASH}/" "${OUT_DIR}/deb/DEBIAN/deb/dpkg-conf/control"
-echo "${VERSION}-${COMMIT_HASH}" > "${OUT_DIR}/deb${PREFIX}/share/${NAME}/.flash_version"
+echo "${VERSION}-${COMMIT_HASH}" > "${OUT_DIR}/deb${HOME_DIR}/${NAME}/.flash_version"
 
 chmod -R 755 "${OUT_DIR}/deb/DEBIAN"
 chmod 755 "${OUT_DIR}/deb${PREFIX}/bin/flash"
