@@ -10,18 +10,10 @@ slot=""
 force=false
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --slot)
-            slot="$2"
-            shift 2
-            ;;
-        --force)
-            force=true
-            shift
-            ;;
-        *)
-            mode="$1"
-            shift
-            ;;
+        --slot) slot="$2"; shift 2 ;;
+        --force) force=true; shift ;;
+        --disable-verity) disable_verity=true; shift ;;
+        *) mode="$1"; shift ;;
     esac
 done
 
@@ -42,44 +34,56 @@ confirm() {
     esac
 }
 
+check_fastboot() {
+    if ! fastboot devices | grep -q "fastboot"; then
+        log "${r3}No device in fastboot mode!${r5}"
+        log "Connect device in fastboot mode first:"
+        log "1. Power off device"
+        log "2. Hold Power + Vol Down"
+        log "3. Connect USB cable"
+        exit 1
+    fi
+}
+
 check_images() {
     local img_count=$(ls *.img *.bin 2>/dev/null | wc -l)
     if [ "$img_count" -eq 0 ]; then
-        log "${r3}ERROR: No .img or .bin files found in current directory!${r5}"
-        log "Please cd to the directory containing your firmware images"
+        log "${r3}ERROR: No .img or .bin files found!${r5}"
+        log "Please cd to the directory containing firmware images"
         exit 1
     fi
 }
 
 set_slot() {
-    if [ -n "$slot" ]; then
-        log "${g3}Setting active slot to ${slot}...${r5}"
-        fastboot set_active "$slot" || {
-            log "${r3}Failed to set active slot!${r5}"
-            exit 1
-        }
-        fastboot oem cdms
-    fi
+    [ -z "$slot" ] && return
+    log "${g3}Setting active slot to ${slot}...${r5}"
+    fastboot set_active "$slot" || {
+        log "${r3}Failed to set active slot!${r5}"
+        exit 1
+    }
+    fastboot oem cdms
 }
 
 flash_partition() {
     local partition="$1"
     local img="$2"
+    local flags=""
     
-    if [ -n "$slot" ] && [[ "$partition" != "super" ]]; then
-        partition="${partition}_${slot}"
-    fi
+    [ -n "$slot" ] && [[ "$partition" != "super" ]] && partition="${partition}_${slot}"
+    
+    [[ "$partition" == vbmeta* ]] && [ "$disable_verity" = true ] && \
+        flags="--disable-verity --disable-verification"
     
     log "${b1}Flashing $partition...${r5}"
-    fastboot flash "$partition" "$img" || {
+    fastboot $flags flash "$partition" "$img" || {
         log "${r3}Failed to flash $partition!${r5}"
         return 1
     }
 }
 
-erase_partitions() {
+wipe_data() {
     log "${r3}Starting data wipe...${r5}"
-    partitions=("userdata" "metadata" "cache" "cust" "md_udc" "frp")
+    partitions=("userdata" "cache" "metadata" "cust")
     
     for partition in "${partitions[@]}"; do
         if confirm " Erase ${partition} partition?"; then
@@ -91,24 +95,41 @@ erase_partitions() {
     done
 }
 
-log "Starting flash process:"
-
-fastboot devices | grep -q "fastboot" || {
-    log "${r3}No device in fastboot mode!${r5}"
-    exit 1
+fastbootd() {
+    local partitions=("system" "vendor" "product" "system_ext" "mi_ext")
+    local needs_fastbootd=false
+    
+    for p in "${partitions[@]}"; do
+        [ -f "$p.img" ] && { needs_fastbootd=true; break; }
+    done
+    
+    if ! $needs_fastbootd; then
+        return
+    fi
+    
+    log "${y1}Switching to fastbootd for dynamic partitions..${r5}"
+    fastboot reboot fastboot
+    sleep 5
+    
+    for p in "${partitions[@]}"; do
+        [ -f "$p.img" ] || continue
+        flash_partition "$p" "$p.img"
+    done
+    
+    log "${y1}Returning to bootloader...${r5}"
+    fastboot reboot bootloader
+    sleep 5
 }
 
+check_fastboot
 check_images
 set_slot
 
 if [ "$mode" == "all" ]; then
-    if confirm " ${r3}WARNING: This will ERASE ALL USER DATA! Continue?${r5}"; then
-        erase_partitions
-    else
-        log "${r3}Data wipe cancelled!${r5}"
-    fi
+    confirm "${r3}WARNING:${r5} This will ERASE ALL USER DATA! Continue?" && \
+    wipe_data
 elif [ "$mode" == "keep_data" ]; then
-    log "${g3}Keeping user data (no wipe will be performed)${r5}"
+    log "Skipping data wipe (keep_data mode)${r5}"
 else
     log "${r3}Unknown command!${r5}"
     exit 1
@@ -120,25 +141,25 @@ for vbmeta in vbmeta*.img; do
     flash_partition "$partition" "$vbmeta"
 done
 
-preloader=(preloader*)
-if [ ${#preloaders[@]} -eq 1 ]; then
-    confirm " Flash preloader (dangerous operation)" && \
-    flash_partition "preloader" "${preloaders[0]}"
-fi
+fastbootd
 
 for img in *.img *.bin; do
     [ -f "$img" ] || continue
-    
     case "$img" in
         vbmeta*|preloader*) continue ;;
+        system*|vendor*|product*|system_ext*|mi_ext*) continue ;;
         *)
             partition=$(basename "$img" .img)
             partition=$(basename "$partition" .bin)
-            
             flash_partition "$partition" "$img"
             ;;
     esac
 done
+
+if [ -f "preloader"* ]; then
+    confirm "${r3}WARNING:${r5} Preloader flashing is dangerous! Continue?" && \
+    flash_partition "preloader" "preloader"*
+fi
 
 log "${g3}SUCCESS: Flashing completed!${r5}"
 log "Rebooting to recovery..."
