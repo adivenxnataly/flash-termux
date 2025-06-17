@@ -8,6 +8,8 @@ r3 = "\033[31m"
 y1 = "\033[33m"
 r5 = "\033[0m"
 
+VERSION_FILE = "/data/data/com.termux/files/usr/share/flash-termux/.flash_version"
+
 def show_help():
     print("""flash - Copyright (C) 2025 Adinata
 
@@ -20,16 +22,31 @@ def show_help():
  Advanced Options:
    --slot=<a|b>           : Specify slot for A/B devices
    --force                : Skip confirmation prompts
+   --disable-verity       : Disable dm-verity and verification
+   -v, --version          : Show flash-termux version
 
  Example:
    flash extract ROM.zip
-   flash all --slot=a
-   flash keep_data --slot=b
+   flash all --slot=a --disable-verity
+   flash keep_data --slot=b --force
    """)
+
+def show_version():
+    try:
+        with open(VERSION_FILE, 'r') as f:
+            version = f.read().strip()
+            print(f"flash-termux version: {version}")
+    except FileNotFoundError:
+        print(f"{r3}ERROR: Version file not found at {VERSION_FILE}{r5}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"{r3}ERROR reading version: {str(e)}{r5}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     slot = None
     force = False
+    disable_verity = False
     args = []
     
     for arg in sys.argv[1:]:
@@ -40,6 +57,11 @@ if __name__ == "__main__":
                 sys.exit(1)
         elif arg == "--force":
             force = True
+        elif arg == "--disable-verity":
+            disable_verity = True
+        elif arg in ["-v", "--version"]:
+            show_version()
+            sys.exit(0)
         elif arg in ["help", "-h", "--help"]:
             show_help()
             sys.exit(0)
@@ -62,6 +84,8 @@ if __name__ == "__main__":
             execute_args.extend(["--slot", slot])
         if force:
             execute_args.append("--force")
+        if disable_verity:
+            execute_args.append("--disable-verity")
         os.execvp("flash-execute", execute_args)
     else:
         print(f"{r3} ERROR: Unknown command!")
