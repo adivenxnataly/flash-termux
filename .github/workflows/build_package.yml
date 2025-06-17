@@ -27,7 +27,6 @@ jobs:
     - name: Build package
       id: build
       run: |
-        chmod +x .github/scripts/deb.sh
         .github/scripts/deb.sh
         
     - name: Upload artifact
